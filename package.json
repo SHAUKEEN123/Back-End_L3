@@ -1,7 +1,7 @@
 {
   "name": "back-end_l3",
   "version": "1.0.0",
-  "description": "A data modeling preactice L",
+  "description": "A Big project",
   "keywords": [
     "BackEnd"
   ],
@@ -10,10 +10,15 @@
   "type": "module",
   "main": "index.js",
   "scripts": {
-    "dev": "nodemon src/index.js"
+    "dev": "nodemon -r dotenv/config src/index.js"
   },
   "devDependencies": {
     "nodemon": "^3.1.9",
     "prettier": "^3.5.1"
+  },
+  "dependencies": {
+    "dotenv": "^16.4.7",
+    "express": "^4.21.2",
+    "mongoose": "^8.10.1"
   }
 }
