@@ -9,17 +9,16 @@ class API_Error extends Error{
         super(message)     //❌ Error: Must call super before using 'this' in derived class constructor, and super keyword is essential in inheritance
         this.statusCode = statusCode;
         this.message = message;
-        this.errors = errors;
-        
+        this.errors = errors;      
+        this.data = null;
+        this.success = false;
         // stack trace 
         if (stack) {
             this.stack = stack;
         } else {
             Error.captureStackTrace(this, this.constructor)
         }
-        
-        this.data = null;
-        this.success = false;
+
     }
 }
 
