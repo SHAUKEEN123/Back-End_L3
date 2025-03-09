@@ -56,6 +56,7 @@ const userSchema= new Schema(
 // and is used for password encryption and dcryption and campare dcrypted password and plain text password  
 userSchema.pre("save", async function (next) {
     if(!this.isModified("password")) return next()
+
     this.password = await bcrypt.hash(this.password, 10)
     next()
 })
@@ -63,6 +64,9 @@ userSchema.pre("save", async function (next) {
 // compare palin text password and hashing password 
 // if password match then it return true otherwise return false
 userSchema.methods.isPasswordCorrect = async function(password){
+    // console.log("user docs : ",this);
+    // console.log("Input Password:", password);
+    // console.log("Stored Hashed Password:", this.password);
     return await bcrypt.compare(password, this.password);
 }
 
