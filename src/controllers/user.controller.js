@@ -3,7 +3,7 @@ import { API_Error } from "../utils/API_Error.js";
 import { User }  from "../models/user.model.js";
 import { uploadOnCloudinary } from "../utils/cloudinary.js";
 import { API_Response } from "../utils/API_Response.js";
-
+import jwt from "jsonwebtoken"
 
 const generateAccessAndRefereshTokens = async(userId)=>{
 try {
@@ -207,8 +207,215 @@ return res
 
 })
 
+//refresh accessToken 
+const refreshAccessToken = asyncHandler( async(req, res)=>{
+    const incomingRefreshToken = req.cookies?.refreshToken || req.body?.refreshToken
+
+    if (!incomingRefreshToken) {
+        throw new API_Error(401, "unauthorized request")
+    }
+
+    try {
+    const decodedToken = jwt.verify(incomingRefreshToken, process.env.REFRESH_TOKEN_SECRET)    
+ 
+    const user = await User.findById(decodedToken?._id)
+ 
+     
+    if (!user) {
+        throw new API_Error(401, "Invalid refreshToken")
+    }
+ 
+    if (incomingRefreshToken !== user?.refreshToken) {
+        throw new API_Error(401,"Refresh token is expired or used");
+    }
+    const {accessToken , newRefreshToken} = await generateAccessAndRefereshTokens(user._id)
+
+    const options = {
+        httpOnly : true,
+        secure: true
+    }
+    return res
+    .status(200)
+    .cookie("accessToken", accessToken, options)
+    .cookie("refreshToken", newRefreshToken, options)
+    .json(
+        new API_Response(
+            200,
+            {
+                accessToken, refreshToken : newRefreshToken, 
+            },
+            "Access token refreshed Succsessfully"
+         )
+     )
+   } catch (error) {
+    throw new API_Error(401,error?.message || "Refresh Token Invalid");
+   }
+
+})
+
+//change current password 
+const changeCurrentPassword = asyncHandler(async(req, res)=>{
+    //destructuring password on frontend 
+    const {Old_Password, New_Password} = req.body   //the request body actually contains oldPassword and newPassword when sent from the frontend or API client (e.g., Postman). 
+
+    // access user with req.user = user 
+    const user = await User.findById(req.user?._id)
+    
+    // varify Old_Password and user'database password 
+    const isPasswordCorrect = await user.isPasswordCorrect(Old_Password)
+
+    if (!isPasswordCorrect) {
+        throw new API_Error(400,"Invaild Old password");
+    }
+
+    user.password = New_Password
+    user.save({validateBeforeSave : false})
+
+    return res
+    .status(200)
+    .json(
+        new API_Response(
+            200, 
+            {},
+            "Password change successfully"
+        )
+    )
+})
+
+// if click on profile than get current user to change account and images 
+const getCurrentUser = asyncHandler(async()=>{
+    return res
+    .status(200)
+    .json(
+        new API_Response(
+            200,
+            req.user,
+            "User fetched Successfully"
+        )
+    )
+})
+
+// modify account detalis 
+const updateAccountDetalis = asyncHandler(async(req, res)=>{
+    const {email, fullName} = req.body
+    if (!email || !fullName) {
+        throw new API_Error(400,"All fields are required");
+    }
+
+    const user = await User.findByIdAndUpdate(
+        req.user?._id,
+        {
+            $set:{
+                fullName: fullName,
+                email: email
+                // second version of above code 
+                // fullName, 
+                // email
+            },
+        },
+        {
+            new: true
+        }
+    )
+
+    return res
+    .status(200)
+    .json(
+        new API_Response(
+            200,
+            // updated user retrun
+            user,
+            "Account details updated successfully"
+        )
+    )
+
+})
+
+// modify images 
+const updateUserAvatar = asyncHandler(async(req, res)=>{
+// with the help of multer middleware access files ,if access one file use req.file only 
+    const avatarLocalpath = req.file?.path
+
+    if (!avatarLocalpath) {
+        throw new API_Error(400,"avatar file is requried");
+    }
+
+    const avatar = await uploadOnCloudinary(avatarLocalpath)
+
+    if (!avatar.url) {
+        throw new API_Error(400,"Error while uploading on avatar");
+        
+    }
+    const user = User.findByIdAndUpdate(
+        // with the help of auth middleware we access user 
+        req.user?._id,
+        {
+            $set:{
+                avatar: avatar.url
+            }
+        },
+        {
+            new:true
+        }
+    ).select("-password")
+
+    return res
+    .status(200)
+    .json(
+        new API_Response(
+            200,
+            user,
+            "Avatar image updated successfully"
+    )
+)
+
+})
+
+const  updateUserCoverImage = asyncHandler(async(req, res)=>{
+    const coverImageLocalPath = req.file?.path
+
+    if (!coverImageLocalPath) {
+        throw new API_Error(400, "cover image file is requried");
+    }
+
+    const coverImage = await uploadOnCloudinary(coverImageLocalPath)
+
+    if (!coverImage.url) {
+        throw new API_Error(400,"Error while uploading on cover image");
+    }
+
+    const user = await User.findByIdAndUpdate(
+        req.user?._id,
+        {
+            $set:{
+                coverImage: coverImage.url
+            }
+        },
+        {
+            new : true
+        }
+    ).select("-password")
+
+    return res
+    .status(200)
+    .json(
+        new API_Response(
+            200,
+            user,
+            "cover image updated successfully"
+        )
+    )
+})
+
+
 export { 
     registerUser,
     login_User,
-    logout_User
+    logout_User,
+    refreshAccessToken,
+    changeCurrentPassword,
+    getCurrentUser,
+    updateAccountDetalis,
+    updateUserAvatar,
+    updateUserCoverImage
  }

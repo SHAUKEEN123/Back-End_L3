@@ -52,7 +52,7 @@ const userSchema= new Schema(
 
 )
 
-// pre() read from mongoose middleware types 
+// pre() is a hook in mongoDB is user to read from mongoose middleware types 
 // and is used for password encryption and dcryption and campare dcrypted password and plain text password  
 userSchema.pre("save", async function (next) {
     if(!this.isModified("password")) return next()
@@ -95,7 +95,7 @@ userSchema.methods.generateAccessToken = function(){
 userSchema.methods.generateRefreshToken = function(){
    return jwt.sign(
     {
-        id : this._id,
+        _id : this._id,
     },
     process.env.REFRESH_TOKEN_SECRET,
     {
