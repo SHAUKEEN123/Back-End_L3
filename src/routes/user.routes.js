@@ -2,6 +2,8 @@ import { Router } from "express";
 import {
     changeCurrentPassword,
     getCurrentUser,
+    getUserProfile,
+    getWatchHistory,
     login_User,
     logout_User,
     refreshAccessToken, 
@@ -9,7 +11,7 @@ import {
     updateAccountDetalis,
     updateUserAvatar,
     updateUserCoverImage,
-                    } from "../controllers/user.controller.js"
+    } from "../controllers/user.controller.js"
 import { upload } from "../middlewares/multer.middleware.js";
 import { verifyJWT } from "../middlewares/auth.middleware.js";
 const router = Router()
@@ -33,9 +35,14 @@ router.route("/login").post(login_User)
 // secured routes 
 router.route("/logout").post(verifyJWT, logout_User)
 router.route("/refresh-token").post(refreshAccessToken)
-router.route("/Change-password").post(verifyJWT,changeCurrentPassword)
-router.route("/profile").post(verifyJWT,getCurrentUser)
-router.route("/Account-Detalis").post(verifyJWT,updateAccountDetalis)
-router.route("/update-avatar").post(upload, verifyJWT, updateUserAvatar)
-router.route("/update-coverImage").post(upload, verifyJWT, updateUserCoverImage)
+router.route("/change-password").post(verifyJWT,changeCurrentPassword)
+router.route("/current-user").get(verifyJWT,getCurrentUser)
+//.patch(): is used to update a specific part of resources
+router.route("/update-account-detalis").patch(verifyJWT,updateAccountDetalis)
+router.route("/update-avatar").patch(verifyJWT, upload.single("avatar"), updateUserAvatar)
+router.route("/update-coverImage").patch(verifyJWT, upload.single("coverImage"), updateUserCoverImage)
+
+router.route("/c/:username").get(verifyJWT, getUserProfile)
+router.route("/history").get(verifyJWT, getWatchHistory)
+
 export default router;

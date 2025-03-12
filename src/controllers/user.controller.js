@@ -4,6 +4,7 @@ import { User }  from "../models/user.model.js";
 import { uploadOnCloudinary } from "../utils/cloudinary.js";
 import { API_Response } from "../utils/API_Response.js";
 import jwt from "jsonwebtoken"
+import mongoose from "mongoose";
 
 const generateAccessAndRefereshTokens = async(userId)=>{
 try {
@@ -177,8 +178,11 @@ const logout_User = asyncHandler( async(req, res)=>{
    User.findByIdAndUpdate(
     req.user._id,
     {
-        $set:{
-            refreshToken: 1 // this removes the field from document /user docs
+        // $set:{
+        //     refreshToken: 1 // this removes the field from document /user docs
+        // }
+        $unset: { 
+            refreshToken: ""
         }
     },
     {
@@ -204,7 +208,6 @@ return res
         "User Logout Successfully"
     )
 )
-
 })
 
 //refresh accessToken 
@@ -228,6 +231,7 @@ const refreshAccessToken = asyncHandler( async(req, res)=>{
     if (incomingRefreshToken !== user?.refreshToken) {
         throw new API_Error(401,"Refresh token is expired or used");
     }
+
     const {accessToken , newRefreshToken} = await generateAccessAndRefereshTokens(user._id)
 
     const options = {
@@ -256,20 +260,20 @@ const refreshAccessToken = asyncHandler( async(req, res)=>{
 //change current password 
 const changeCurrentPassword = asyncHandler(async(req, res)=>{
     //destructuring password on frontend 
-    const {Old_Password, New_Password} = req.body   //the request body actually contains oldPassword and newPassword when sent from the frontend or API client (e.g., Postman). 
+    const {oldPassword, newPassword} = req.body   //the request body actually contains oldPassword and newPassword when sent from the frontend or API client (e.g., Postman). 
 
     // access user with req.user = user 
     const user = await User.findById(req.user?._id)
     
     // varify Old_Password and user'database password 
-    const isPasswordCorrect = await user.isPasswordCorrect(Old_Password)
+    const isPasswordCorrect = await user.isPasswordCorrect(oldPassword)
 
     if (!isPasswordCorrect) {
-        throw new API_Error(400,"Invaild Old password");
+        throw new API_Error(400,"Invaild old password");
     }
 
-    user.password = New_Password
-    user.save({validateBeforeSave : false})
+    user.password = newPassword
+    await user.save({validateBeforeSave : false})
 
     return res
     .status(200)
@@ -283,7 +287,7 @@ const changeCurrentPassword = asyncHandler(async(req, res)=>{
 })
 
 // if click on profile than get current user to change account and images 
-const getCurrentUser = asyncHandler(async()=>{
+const getCurrentUser = asyncHandler(async(req, res)=>{
     return res
     .status(200)
     .json(
@@ -298,6 +302,7 @@ const getCurrentUser = asyncHandler(async()=>{
 // modify account detalis 
 const updateAccountDetalis = asyncHandler(async(req, res)=>{
     const {email, fullName} = req.body
+
     if (!email || !fullName) {
         throw new API_Error(400,"All fields are required");
     }
@@ -343,10 +348,10 @@ const updateUserAvatar = asyncHandler(async(req, res)=>{
     const avatar = await uploadOnCloudinary(avatarLocalpath)
 
     if (!avatar.url) {
-        throw new API_Error(400,"Error while uploading on avatar");
+        throw new API_Error(400,"Error while uploading avatar");
         
     }
-    const user = User.findByIdAndUpdate(
+    const user = await User.findByIdAndUpdate(
         // with the help of auth middleware we access user 
         req.user?._id,
         {
@@ -365,6 +370,7 @@ const updateUserAvatar = asyncHandler(async(req, res)=>{
         new API_Response(
             200,
             user,
+        //  {avatar: avatar.url},
             "Avatar image updated successfully"
     )
 )
@@ -402,11 +408,170 @@ const  updateUserCoverImage = asyncHandler(async(req, res)=>{
         new API_Response(
             200,
             user,
+            // {coverImage: coverImage.url},
             "cover image updated successfully"
         )
     )
 })
 
+// add to implement subscription model 
+const getUserProfile = asyncHandler(async(req, res)=>{
+    // to fetch profile hit a url such as youtube.com/profile so username fetched from params not from body 
+const {username} = req.params
+
+if (!username?.trim()) {
+    throw new API_Error(400,"user is not found !...");
+}
+
+const channel = await User.aggregate([
+    // add stage1 or pipeline1 to match username with db username 
+    {
+        $match:{
+            username : username?.toLowerCase()
+        }
+    },
+    // add stage2 to left joining user model with subcsription model to fetch the subscribers or followers
+    {
+        $lookup:{
+            from: "subscriptions",
+            localField:"_id",
+            foreignField: "channel",
+            as: "subscribers"
+        }
+    },
+    // add stage3 to left joining user model with subscription model to fetch the subscribedto or following 
+    {
+        $lookup:{
+            from:"subscriptions",
+            localField:"_id",
+            foreignField:"subscriber",
+            as:"subscribed"
+        }
+    },
+    // add stage4 to add fileds on user model 
+    {
+        $addFields:{
+            subscribersCount:{
+                $size: "$subscribers"
+            },
+            channelsSubscribedToCount:{
+                $size: "$subscribed"
+            },
+            isSubscribed:{
+                $cond: {
+                if:{$in:[req.user?._id, "$subscribers.subscriber"]},
+                then: true,
+                else:false
+                }
+            }
+        }
+    },
+    // add stage5 to give only spacific fileds on frontend 
+    {
+        $project:{
+            username: 1,
+            fullName: 1,
+            avatar: 1,
+            coverImage :1,
+            subscribers: 1,
+            subscribed: 1,
+            subscribersCount: 1,
+            channelsSubscribedToCount: 1,
+            isSubscribed: 1,
+            // email: 1 to reduce cost or this best prectice 
+        }
+    }
+])
+
+if (!channel.length) {
+    throw new API_Error(404,"channel does not exists");   
+}
+
+return res
+    .status(200)
+    .json(
+        new API_Response(
+            200,
+            // channel?.[0],
+            channel[0],
+            "User channel fetched successfully"
+        )
+    )
+})
+
+// to trace watch history of user 
+const getWatchHistory = asyncHandler(async(req, res)=>{
+
+const user = await User.aggregate([
+    {
+        $match:{
+            _id: new mongoose.Types.ObjectId(req.user._id)
+        }
+    },
+    // join vedio model with user to trake history 
+    {
+        $lookup:{
+            from: "videos",
+            localField: "watchHistory",
+            foreignField: "_id",
+            as: "History",
+            // add sub_pipeline to access owner on video at the time of trake history resion is that owner have objectId so that joining operation perform b/w user and vedio model or // a join user model with video model 
+            pipeline: [
+                {
+                    $lookup:{
+                        from: "users",
+                        localField: "owner",
+                        foreignField:"_id",
+                        as: "owner",
+                        // add another pipeline to give selected information on rontend beacouse this piont owner have all details of user 
+                        pipeline:[
+                            {
+                                $project:{
+                                    username : 1,
+                                    fullName : 1,
+                                    avatar : 1,
+                                    // History: 1
+                                }
+                            }
+                        ]
+                    }
+                },
+                {
+                    $addFields:{
+                        owner:{
+                            // $arrayElemAt: ["$owner"] 
+                            $first : "$owner"
+                        }
+                    }
+                }
+            ]
+        }
+    }
+])
+
+// if (!user[0] || !user[0].watchHistory || user[0].watchHistory.length===0) {
+//     return res
+//     .status(404)
+//     .json(
+//         new API_Response(
+//             404,
+//             [],
+//             "No Watch History Found !..."
+//         )
+//     )
+// }
+
+return res
+.status(200)
+.json(
+    new API_Response(
+        200,
+        user[0].watchHistory,
+        "User Watch History Fetched Successfully !..."
+    )
+)
+
+})
 
 export { 
     registerUser,
@@ -417,5 +582,7 @@ export {
     getCurrentUser,
     updateAccountDetalis,
     updateUserAvatar,
-    updateUserCoverImage
+    updateUserCoverImage,
+    getUserProfile,
+    getWatchHistory
  }
