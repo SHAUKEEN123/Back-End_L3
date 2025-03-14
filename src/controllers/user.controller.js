@@ -1,7 +1,10 @@
 import { asyncHandler } from "../utils/asyncHandler.js";
 import { API_Error } from "../utils/API_Error.js";
 import { User }  from "../models/user.model.js";
-import { uploadOnCloudinary } from "../utils/cloudinary.js";
+import { uploadOnCloudinary ,
+    deleteAvatarFromCloudinary ,
+    deleteCoverImageFromCloudinary
+} from "../utils/cloudinary.js";
 import { API_Response } from "../utils/API_Response.js";
 import jwt from "jsonwebtoken"
 import mongoose from "mongoose";
@@ -212,6 +215,7 @@ return res
 
 //refresh accessToken 
 const refreshAccessToken = asyncHandler( async(req, res)=>{
+
     const incomingRefreshToken = req.cookies?.refreshToken || req.body?.refreshToken
 
     if (!incomingRefreshToken) {
@@ -302,20 +306,25 @@ const getCurrentUser = asyncHandler(async(req, res)=>{
 // modify account detalis 
 const updateAccountDetalis = asyncHandler(async(req, res)=>{
     const {email, fullName} = req.body
+    // const {oldEmail, oldFullName, newEmail, newFullName} = req.body
 
     if (!email || !fullName) {
         throw new API_Error(400,"All fields are required");
     }
 
+    // if (!oldEmail || !oldFullName || !newEmail || !newFullName) {
+    //     throw new API_Error(400,"All fields are required");
+    // }
     const user = await User.findByIdAndUpdate(
         req.user?._id,
         {
             $set:{
-                fullName: fullName,
-                email: email
+                fullName, 
+                email
+               
                 // second version of above code 
-                // fullName, 
-                // email
+                // fullName: newFullName,
+                // email: newEmail
             },
         },
         {
@@ -345,13 +354,26 @@ const updateUserAvatar = asyncHandler(async(req, res)=>{
         throw new API_Error(400,"avatar file is requried");
     }
 
+    // delete old avatar before set new avatar 
+    const user = await User.findById(req.user?._id);
+
+    if (!user) {
+        throw new API_Error(404,"user not Found");
+    }
+
+    if (user.avatar) {
+        await deleteAvatarFromCloudinary(user.avatar)
+    }
+
+// upload new image
     const avatar = await uploadOnCloudinary(avatarLocalpath)
 
     if (!avatar.url) {
         throw new API_Error(400,"Error while uploading avatar");
         
     }
-    const user = await User.findByIdAndUpdate(
+
+    const updatedUser = await User.findByIdAndUpdate(
         // with the help of auth middleware we access user 
         req.user?._id,
         {
@@ -369,7 +391,7 @@ const updateUserAvatar = asyncHandler(async(req, res)=>{
     .json(
         new API_Response(
             200,
-            user,
+            updatedUser,
         //  {avatar: avatar.url},
             "Avatar image updated successfully"
     )
@@ -384,13 +406,25 @@ const  updateUserCoverImage = asyncHandler(async(req, res)=>{
         throw new API_Error(400, "cover image file is requried");
     }
 
+// delete old coverimage 
+    const user = await User.findById(req.user?._id);
+
+    if (!user) {
+        throw new API_Error(401,"user not found!...");
+    }
+
+    if (user.coverImage) {
+    await deleteCoverImageFromCloudinary(user.coverImage)
+    }
+
+// upload new image 
     const coverImage = await uploadOnCloudinary(coverImageLocalPath)
 
     if (!coverImage.url) {
         throw new API_Error(400,"Error while uploading on cover image");
     }
-
-    const user = await User.findByIdAndUpdate(
+//    set new coverImgae
+    const updateduser = await User.findByIdAndUpdate(
         req.user?._id,
         {
             $set:{
@@ -407,7 +441,7 @@ const  updateUserCoverImage = asyncHandler(async(req, res)=>{
     .json(
         new API_Response(
             200,
-            user,
+            updateduser,
             // {coverImage: coverImage.url},
             "cover image updated successfully"
         )

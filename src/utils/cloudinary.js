@@ -1,5 +1,6 @@
 import cloudinary from "cloudinary"
 import fs from "fs"
+import { API_Error } from "./API_Error.js";
 
 // Configuration
 cloudinary.config({ 
@@ -26,6 +27,42 @@ const uploadOnCloudinary = async (localFilePath) => {
     }
 }
 
+const deleteAvatarFromCloudinary = async(avatarURL)=>{
+    try {
+        // console.log(avatarURL)
+        const publicId = avatarURL.split("/").pop().split(".")[0];
+        // const result = 
+        await cloudinary.uploader.destroy(publicId)
 
+        // console.log("Cloudinary Delete Response:", result);
+        // if (result.result !=="ok") {
+        //     throw new API_Error(400, "")
+        // }
+        // return null; 
+    } catch (error) {
+        throw new API_Error(401, error?.message ||"avatarURL not found!...");
+    }
+}
 
-export {uploadOnCloudinary}
+const deleteCoverImageFromCloudinary = async(coverImageURL)=>{
+try {
+    // console.log(coverImageURL);
+    
+    const publicId = coverImageURL.split("/").pop().split(".")[0];
+    const result = await cloudinary.uploader.destroy(publicId)
+
+    //  console.log("Cloudinary Delete Response:", result);
+        // if (result.result !=="ok") {
+        //     throw new API_Error(400, "")
+        // }
+        // return null; 
+} catch (error) {
+    throw new API_Error(401, error?.message ||"coverImageURL not found!...");
+}
+}
+
+export {
+    uploadOnCloudinary,
+    deleteAvatarFromCloudinary,
+    deleteCoverImageFromCloudinary
+}
