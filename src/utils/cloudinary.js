@@ -61,8 +61,22 @@ try {
 }
 }
 
+const deleteVideoFromCloudinary = async(videoURL)=>{
+try {
+    const publicId = videoURL.split("/").pop().split(".")[0];
+    const result = await cloudinary.uploader.destroy(publicId , {resource_type:"video"})
+         // if (result.result !=="ok") {
+        //     throw new API_Error(400, "")
+        // }
+        // return null; 
+} catch (error) {
+    throw new API_Error(401, error?.message ||"videoURL not found!...");
+}
+}
+
 export {
     uploadOnCloudinary,
     deleteAvatarFromCloudinary,
-    deleteCoverImageFromCloudinary
+    deleteCoverImageFromCloudinary,
+    deleteVideoFromCloudinary
 }
